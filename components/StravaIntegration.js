@@ -7,43 +7,130 @@ export default function StravaIntegration({ crankset, cassette }) {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [accessToken, setAccessToken] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('checking'); // checking, disconnected, connected, error
 
   useEffect(() => {
-    // Check URL params for Strava auth results
-    const urlParams = new URLSearchParams(window.location.search);
-    const connected = urlParams.get('strava_connected');
-    const athlete = urlParams.get('athlete');
-    const token = urlParams.get('access_token');
-    const error = urlParams.get('strava_error');
-
-    if (connected === 'true' && athlete && token) {
-      setIsConnected(true);
-      setAthleteName(decodeURIComponent(athlete));
-      setAccessToken(decodeURIComponent(token));
-      
-      // Clean URL (remove sensitive token from URL)
-      window.history.replaceState({}, '', '/pro');
-    }
-
-    if (error) {
-      alert(`Strava connection failed: ${error}`);
-      window.history.replaceState({}, '', '/pro');
-    }
+    initializeStravaConnection();
   }, []);
 
+  const initializeStravaConnection = async () => {
+    try {
+      // First check for stored credentials
+      const storedToken = localStorage.getItem('cranksmith_strava_token');
+      const storedAthlete = localStorage.getItem('cranksmith_strava_athlete');
+      const storedExpiry = localStorage.getItem('cranksmith_strava_expiry');
+
+      if (storedToken && storedAthlete) {
+        // Check if token is still valid (Strava tokens expire)
+        const isExpired = storedExpiry && Date.now() > parseInt(storedExpiry);
+        
+        if (!isExpired) {
+          setIsConnected(true);
+          setAthleteName(storedAthlete);
+          setAccessToken(storedToken);
+          setConnectionStatus('connected');
+          return;
+        } else {
+          // Clean up expired tokens
+          clearStoredCredentials();
+        }
+      }
+
+      // Check URL params for new auth
+      const urlParams = new URLSearchParams(window.location.search);
+      const connected = urlParams.get('strava_connected');
+      const athlete = urlParams.get('athlete');
+      const token = urlParams.get('access_token');
+      const error = urlParams.get('strava_error');
+
+      if (connected === 'true' && athlete && token) {
+        const decodedAthlete = decodeURIComponent(athlete);
+        const decodedToken = decodeURIComponent(token);
+        
+        setIsConnected(true);
+        setAthleteName(decodedAthlete);
+        setAccessToken(decodedToken);
+        setConnectionStatus('connected');
+        
+        // Store credentials securely (expires in 6 hours for security)
+        const expiry = Date.now() + (6 * 60 * 60 * 1000);
+        localStorage.setItem('cranksmith_strava_token', decodedToken);
+        localStorage.setItem('cranksmith_strava_athlete', decodedAthlete);
+        localStorage.setItem('cranksmith_strava_expiry', expiry.toString());
+        
+        // Clean URL immediately for security
+        window.history.replaceState({}, '', '/pro');
+      } else if (error) {
+        setConnectionStatus('error');
+        console.error('Strava connection error:', error);
+        window.history.replaceState({}, '', '/pro');
+      } else {
+        setConnectionStatus('disconnected');
+      }
+    } catch (error) {
+      console.error('Strava initialization error:', error);
+      setConnectionStatus('error');
+    }
+  };
+
+  const clearStoredCredentials = () => {
+    localStorage.removeItem('cranksmith_strava_token');
+    localStorage.removeItem('cranksmith_strava_athlete');
+    localStorage.removeItem('cranksmith_strava_expiry');
+  };
+
   const connectStrava = () => {
-    // Redirect to Strava OAuth
+    setConnectionStatus('connecting');
     window.location.href = '/api/strava/auth';
   };
 
-  const loadDemoData = () => {
-    setIsConnected(true);
-    setAthleteName('Demo User');
-    setAccessToken('demo_token');
-    
-    // Generate demo analysis
-    const demoAnalysis = generateDemoAnalysis(crankset, cassette);
-    setAnalysis(demoAnalysis);
+  const disconnect = () => {
+    setIsConnected(false);
+    setAthleteName('');
+    setAccessToken(null);
+    setAnalysis(null);
+    setConnectionStatus('disconnected');
+    clearStoredCredentials();
+  };
+
+  const getConnectionStatusDisplay = () => {
+    switch (connectionStatus) {
+      case 'checking':
+        return {
+          icon: '⟳',
+          title: 'Checking Strava Connection...',
+          subtitle: 'Verifying stored credentials',
+          className: 'bg-gray-100 border-gray-300 animate-pulse'
+        };
+      case 'connecting':
+        return {
+          icon: '⟳',
+          title: 'Connecting to Strava...',
+          subtitle: 'Redirecting for authorization',
+          className: 'bg-blue-50 border-blue-300 animate-pulse'
+        };
+      case 'connected':
+        return {
+          icon: '🚴',
+          title: `Connected to Strava - ${athleteName}`,
+          subtitle: 'Real-time access to your riding data',
+          className: 'bg-success bg-opacity-10 border-success'
+        };
+      case 'error':
+        return {
+          icon: '⚠️',
+          title: 'Connection Error',
+          subtitle: 'Unable to connect to Strava. Please try again.',
+          className: 'bg-error bg-opacity-10 border-error'
+        };
+      default:
+        return {
+          icon: '🚴',
+          title: 'Connect to Strava',
+          subtitle: 'Unlock personalized gear analysis from your real rides',
+          className: 'bg-gray-50 border-gray-300'
+        };
+    }
   };
 
   const analyzeRides = async () => {
@@ -70,16 +157,10 @@ export default function StravaIntegration({ crankset, cassette }) {
       }
     } catch (error) {
       console.error('Analysis failed:', error);
-      alert('Failed to analyze rides');
+      // Don't use alert in pro software
+      setConnectionStatus('error');
     }
     setLoading(false);
-  };
-
-  const disconnect = () => {
-    setIsConnected(false);
-    setAthleteName('');
-    setAccessToken(null);
-    setAnalysis(null);
   };
 
   if (!crankset || !cassette) {
@@ -90,53 +171,55 @@ export default function StravaIntegration({ crankset, cassette }) {
     );
   }
 
+  const statusDisplay = getConnectionStatusDisplay();
+
   return (
     <div className="strava-integration">
-      {/* Connection Status */}
-      <div className={`p-4 rounded border-2 mb-4 ${
-        isConnected ? 'bg-success bg-opacity-10 border-success' : 'bg-gray-50 border-gray-300'
-      }`}>
+      {/* Professional Connection Status */}
+      <div className={`p-4 rounded border-2 mb-4 transition-all duration-300 ${statusDisplay.className}`}>
         <div className="flex justify-between items-center">
           <div>
             <div className="text-sm font-bold flex items-center gap-2">
-              <span className="text-orange-500">🚴</span>
-              {isConnected ? 
-                `Connected to Strava - ${athleteName}` : 
-                'Connect to Strava'
-              }
+              <span className="text-orange-500">{statusDisplay.icon}</span>
+              {statusDisplay.title}
             </div>
             <div className="text-xs text-text-secondary mt-1">
-              {isConnected ? 
-                'Analyze your real riding data to optimize gear selection' :
-                'Connect your Strava account to see which gears you actually use'
-              }
+              {statusDisplay.subtitle}
             </div>
           </div>
           <div className="flex gap-2">
-            {isConnected ? (
+            {connectionStatus === 'connected' ? (
               <>
                 <button
                   onClick={analyzeRides}
                   disabled={loading}
-                  className="px-3 py-2 bg-accent text-white text-xs rounded hover:bg-opacity-80 disabled:opacity-50"
+                  className="px-3 py-2 bg-accent text-white text-xs rounded hover:bg-opacity-80 disabled:opacity-50 transition-all"
                 >
-                  {loading ? 'Analyzing...' : '📊 Analyze Rides'}
+                  {loading ? (
+                    <span className="flex items-center gap-1">
+                      <span className="animate-spin">⟳</span>
+                      Analyzing...
+                    </span>
+                  ) : (
+                    '📊 Analyze Rides'
+                  )}
                 </button>
                 <button
                   onClick={disconnect}
-                  className="px-3 py-2 bg-gray-200 text-xs rounded hover:bg-gray-300"
+                  className="px-3 py-2 bg-gray-200 text-xs rounded hover:bg-gray-300 transition-all"
                 >
                   Disconnect
                 </button>
               </>
-            ) : (
+            ) : connectionStatus === 'disconnected' || connectionStatus === 'error' ? (
               <button
                 onClick={connectStrava}
-                className="px-3 py-2 bg-orange-500 text-white text-xs rounded hover:bg-opacity-80"
+                disabled={connectionStatus === 'connecting'}
+                className="px-3 py-2 bg-orange-500 text-white text-xs rounded hover:bg-opacity-80 disabled:opacity-50 transition-all"
               >
-                Connect Strava
+                {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect Strava'}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
