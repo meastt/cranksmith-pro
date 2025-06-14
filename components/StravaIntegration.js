@@ -79,8 +79,10 @@ export default function StravaIntegration({ crankset, cassette }) {
     localStorage.removeItem('cranksmith_strava_expiry');
   };
 
+  // FIXED: Proper OAuth flow initiation
   const connectStrava = () => {
     setConnectionStatus('connecting');
+    // Redirect to our auth endpoint, which will handle the OAuth flow
     window.location.href = '/api/strava/auth';
   };
 
@@ -217,7 +219,7 @@ export default function StravaIntegration({ crankset, cassette }) {
                 disabled={connectionStatus === 'connecting'}
                 className="px-3 py-2 bg-orange-500 text-white text-xs rounded hover:bg-opacity-80 disabled:opacity-50 transition-all"
               >
-                {connectionStatus === 'connecting' ? 'Connecting...' : 'Connect Strava'}
+                {connectionStatus === 'connecting' ? 'Connecting...' : '🔗 Connect Strava'}
               </button>
             ) : null}
           </div>
@@ -329,121 +331,4 @@ export default function StravaIntegration({ crankset, cassette }) {
       )}
     </div>
   );
-}
-
-// Demo data generator for testing without Strava API
-function generateDemoAnalysis(crankset, cassette) {
-  if (!crankset || !cassette) return null;
-
-  // Generate gear ratios
-  const [smallCog, largeCog] = [Math.min(...cassette.teeth), Math.max(...cassette.teeth)];
-  const speeds = parseInt(cassette.speeds);
-  const cogs = generateCogProgression(smallCog, largeCog, speeds);
-  
-  const gearAnalysis = [];
-  
-  crankset.teeth.forEach(chainring => {
-    cogs.forEach(cog => {
-      const ratio = chainring / cog;
-      
-      // Simulate realistic usage patterns
-      let usagePercentage = 0;
-      let timeUsed = 0;
-      let distanceUsed = 0;
-      
-      // Most usage in middle gears
-      if (ratio >= 2.0 && ratio <= 4.0) {
-        usagePercentage = Math.random() * 20 + 5; // 5-25%
-        timeUsed = Math.round(Math.random() * 120 + 30); // 30-150 min
-        distanceUsed = Math.round(Math.random() * 200 + 50); // 50-250 km
-      } else if (ratio >= 1.5 && ratio < 2.0) {
-        // Easier gears - climbing
-        usagePercentage = Math.random() * 10 + 2; // 2-12%
-        timeUsed = Math.round(Math.random() * 60 + 10); // 10-70 min
-        distanceUsed = Math.round(Math.random() * 80 + 10); // 10-90 km
-      } else if (ratio > 4.0 && ratio <= 5.0) {
-        // Harder gears - fast flats
-        usagePercentage = Math.random() * 8 + 1; // 1-9%
-        timeUsed = Math.round(Math.random() * 40 + 5); // 5-45 min
-        distanceUsed = Math.round(Math.random() * 60 + 10); // 10-70 km
-      } else {
-        // Extreme gears - rarely used
-        usagePercentage = Math.random() * 2; // 0-2%
-        timeUsed = Math.round(Math.random() * 10); // 0-10 min
-        distanceUsed = Math.round(Math.random() * 20); // 0-20 km
-      }
-      
-      gearAnalysis.push({
-        gearCombo: `${chainring}x${cog}`,
-        ratio,
-        usagePercentage,
-        timeUsed,
-        distanceUsed,
-        avgPower: Math.round(Math.random() * 100 + 150),
-        isUnused: timeUsed < 1,
-        isRarelyUsed: timeUsed < 10,
-        primaryTerrain: ratio < 2.5 ? 'climbing' : ratio > 4.0 ? 'flats' : 'mixed'
-      });
-    });
-  });
-
-  // Sort by usage
-  gearAnalysis.sort((a, b) => b.usagePercentage - a.usagePercentage);
-
-  // Generate recommendations
-  const unusedGears = gearAnalysis.filter(g => g.isUnused);
-  const rarelyUsedGears = gearAnalysis.filter(g => g.isRarelyUsed && !g.isUnused);
-  const topGear = gearAnalysis[0];
-  
-  const recommendations = [];
-  
-  if (unusedGears.length > 0) {
-    recommendations.push({
-      type: 'unused_gears',
-      priority: 'high',
-      title: `${unusedGears.length} gears never used`,
-      description: `You never used: ${unusedGears.slice(0, 3).map(g => g.gearCombo).join(', ')}`,
-      suggestion: 'Consider a smaller cassette range or different chainring sizes',
-      savings: 'Potential weight savings: ~50-100g'
-    });
-  }
-  
-  if (rarelyUsedGears.length > 3) {
-    recommendations.push({
-      type: 'rarely_used',
-      priority: 'medium',
-      title: `${rarelyUsedGears.length} gears rarely used`,
-      description: `Minimal usage: ${rarelyUsedGears.slice(0, 3).map(g => g.gearCombo).join(', ')}`,
-      suggestion: 'Your current range might be too wide for your riding style'
-    });
-  }
-  
-  if (topGear && topGear.usagePercentage > 15) {
-    recommendations.push({
-      type: 'top_gear',
-      priority: 'info',
-      title: `${topGear.gearCombo} is your go-to gear`,
-      description: `Used ${topGear.usagePercentage.toFixed(1)}% of the time`,
-      suggestion: 'This suggests good gear selection for your riding style'
-    });
-  }
-
-  return {
-    totalRides: 25,
-    analyzedDistance: 1250000, // 1250km in meters
-    gearAnalysis,
-    recommendations,
-    lastUpdated: new Date().toISOString()
-  };
-}
-
-function generateCogProgression(smallest, largest, speeds) {
-  const cogs = [];
-  const ratio = Math.pow(largest / smallest, 1 / (speeds - 1));
-  
-  for (let i = 0; i < speeds; i++) {
-    cogs.push(Math.round(smallest * Math.pow(ratio, i)));
-  }
-  
-  return cogs;
 }
