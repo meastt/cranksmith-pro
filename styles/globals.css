@@ -3,8 +3,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* immediately after your @tailwind directives: */
-body { outline: 5px solid hotpink !important; }
+
 
 
 /* …your custom :root tokens & body font… */
