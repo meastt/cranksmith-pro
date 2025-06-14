@@ -1,10 +1,10 @@
-import React from 'react';
+import DataTable from '../components/DataTable';
 
-export default function Pro() {
+export default function ProPage() {
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-4">CrankSmith Pro</h1>
-      <p>Welcome to the professional drivetrain analysis tool.</p>
+    <div className="container mx-auto p-8">
+      <h1 className="text-3xl font-bold mb-6">Compatibility Reports</h1>
+      <DataTable />
     </div>
   );
 }
