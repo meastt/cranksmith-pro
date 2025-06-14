@@ -1,0 +1,31 @@
+/* styles/globals.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* immediately after your @tailwind directives: */
+body { outline: 5px solid hotpink !important; }
+
+
+/* …your custom :root tokens & body font… */
+
+
+/* 2) Your design tokens */
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --text: #111111;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+}
+
+/* 3) Mono font stack */
+body {
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+}

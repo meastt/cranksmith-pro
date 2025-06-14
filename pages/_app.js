@@ -1,15 +1,10 @@
-// pages/_app.js
-import '../styles/pro.css';
-import Head from 'next/head';
+import '../styles/globals.css';  // <-- this file contains your @tailwind directives
+import Layout from '../components/Layout';
 
-export default function App({ Component, pageProps }) {
+export default function CrankSmithApp({ Component, pageProps }) {
   return (
-    <>
-      <Head>
-        <title>CrankSmith Pro - Professional Drivetrain Analysis</title>
-        <meta name="viewport" content="width=1400, initial-scale=1" />
-      </Head>
+    <Layout>
       <Component {...pageProps} />
-    </>
+    </Layout>
   );
 }
