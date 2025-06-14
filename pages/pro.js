@@ -3,6 +3,7 @@ import { useState } from 'react';
 import DataTable from '../components/DataTable';
 import { componentDatabaseV2 } from '../lib/components';
 import GearChart from '../components/GearChart';
+import CompatibilityView from '../components/CompatibilityView';
 
 export default function ProPage() {
   const [selectedCrankset, setSelectedCrankset] = useState(null);
@@ -128,14 +129,14 @@ export default function ProPage() {
           </div>
         )}
 
-        {/* Compatibility Analysis */}
-        {selectedCrankset && selectedCassette && selectedDerailleur && (
+        {/* Real-World Compatibility Matrix */}
+        {(selectedCrankset || selectedCassette || selectedDerailleur) && (
           <div className="p-4">
-            <div className="text-xs font-bold mb-3 uppercase">Compatibility Analysis</div>
-            <CompatibilityAnalysis 
-              crankset={selectedCrankset}
-              cassette={selectedCassette} 
-              derailleur={selectedDerailleur}
+            <div className="text-xs font-bold mb-3 uppercase">Real-World Compatibility</div>
+            <CompatibilityView 
+              selectedCrankset={selectedCrankset}
+              selectedCassette={selectedCassette} 
+              selectedDerailleur={selectedDerailleur}
             />
           </div>
         )}
