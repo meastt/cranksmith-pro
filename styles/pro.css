@@ -1,0 +1,75 @@
+/* CrankSmith Pro St/* styles/pro.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --text: #111111;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--bg);
+  margin: 0;
+  overflow: hidden; /* Pro app doesn't scroll */
+}
+
+/* Data tables */
+.data-table {
+  font-size: 12px;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  font-weight: 600;
+  text-align: left;
+  padding: 8px;
+  border-bottom: 2px solid var(--border);
+  user-select: none;
+}
+
+.data-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr:hover {
+  background: #f3f4f6;
+}
+
+/* No mobile styles - desktop only */
+@media (max-width: 1399px) {
+  body::before {
+    content: "CrankSmith Pro requires a desktop browser (1400px minimum width)";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-size: 18px;
+    padding: 20px;
+    text-align: center;
+  }
+  
+  #__next {
+    display: none;
+  }
+}
