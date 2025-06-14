@@ -4,6 +4,8 @@ import DataTable from '../components/DataTable';
 import { componentDatabaseV2 } from '../lib/components';
 import GearChart from '../components/GearChart';
 import CompatibilityView from '../components/CompatibilityView';
+import BuildSheet from '../components/BuildSheet';
+import StravaIntegration from '../components/StravaIntegration';
 
 export default function ProPage() {
   const [selectedCrankset, setSelectedCrankset] = useState(null);
@@ -137,6 +139,29 @@ export default function ProPage() {
               selectedCrankset={selectedCrankset}
               selectedCassette={selectedCassette} 
               selectedDerailleur={selectedDerailleur}
+            />
+          </div>
+        )}
+
+        {/* Build Sheet Generator */}
+        {selectedCrankset && selectedCassette && selectedDerailleur && (
+          <div className="p-4 border-t border-border">
+            <div className="text-xs font-bold mb-3 uppercase">Build Sheet Generator</div>
+            <BuildSheet 
+              crankset={selectedCrankset}
+              cassette={selectedCassette} 
+              derailleur={selectedDerailleur}
+            />
+          </div>
+        )}
+
+        {/* Strava Integration */}
+        {(selectedCrankset || selectedCassette) && (
+          <div className="p-4 border-t border-border">
+            <div className="text-xs font-bold mb-3 uppercase">🚴 Strava Analysis</div>
+            <StravaIntegration 
+              crankset={selectedCrankset}
+              cassette={selectedCassette}
             />
           </div>
         )}
