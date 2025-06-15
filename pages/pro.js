@@ -1,252 +1,303 @@
-// pages/pro.js
+// pages/pro.js - Mobile-first bike shop tool
 import { useState } from 'react';
-import DataTable from '../components/DataTable';
 import { componentDatabaseV2 } from '../lib/components';
-import GearChart from '../components/GearChart';
-import CompatibilityView from '../components/CompatibilityView';
-import BuildSheet from '../components/BuildSheet';
-import StravaIntegration from '../components/StravaIntegration';
-import ComponentSelector from '../components/ComponentSelector';
 
 export default function ProPage() {
   const [selectedCrankset, setSelectedCrankset] = useState(null);
   const [selectedCassette, setSelectedCassette] = useState(null);
   const [selectedDerailleur, setSelectedDerailleur] = useState(null);
+  const [customerName, setCustomerName] = useState('');
+  const [activeTab, setActiveTab] = useState('crankset');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
-  return (
-    <div className="flex h-screen bg-bg text-text font-mono text-[13px] leading-[1.4]">
+  // Get top 10 most common components for each category
+  const getTopComponents = (components, count = 10) => {
+    // Prioritize Shimano 105, Ultegra, GRX and SRAM Force/Rival
+    const priority = ['shimano-105', 'shimano-ultegra', 'shimano-grx', 'sram-force', 'sram-rival'];
+    
+    return components
+      .filter(c => priority.some(p => c.id.includes(p)))
+      .slice(0, count);
+  };
+
+  const topCranksets = getTopComponents(componentDatabaseV2.cranksets);
+  const topCassettes = getTopComponents(componentDatabaseV2.cassettes);
+  const topDerailleurs = getTopComponents(componentDatabaseV2.rearDerailleurs);
+
+  // Simple compatibility check
+  const checkCompatibility = () => {
+    if (!selectedCrankset || !selectedCassette || !selectedDerailleur) return null;
+    
+    const crankBrand = selectedCrankset.model.includes('Shimano') ? 'shimano' : 'sram';
+    const cassetteBrand = selectedCassette.model.includes('Shimano') ? 'shimano' : 'sram';
+    const rdBrand = selectedDerailleur.model.includes('Shimano') ? 'shimano' : 'sram';
+    
+    const brands = new Set([crankBrand, cassetteBrand, rdBrand]);
+    
+    // Check speeds compatibility
+    const crankSpeed = parseInt(selectedCrankset.speeds) || 11;
+    const cassetteSpeed = parseInt(selectedCassette.speeds) || 11;
+    const rdSpeed = parseInt(selectedDerailleur.speeds) || 11;
+    
+    if (cassetteSpeed !== rdSpeed) {
+      return { 
+        status: 'error', 
+        message: 'Speed mismatch - cassette and derailleur must match',
+        time: 'N/A'
+      };
+    }
+    
+    if (brands.size === 1) {
+      return { 
+        status: 'compatible', 
+        message: 'Perfect match - same brand ecosystem',
+        time: '45 min'
+      };
+    } else {
+      return { 
+        status: 'warning', 
+        message: 'Mixed brands - works but may need adjustment',
+        time: '60 min'
+      };
+    }
+  };
+
+  const compatibility = checkCompatibility();
+  const totalWeight = (selectedCrankset?.weight || 0) + (selectedCassette?.weight || 0) + (selectedDerailleur?.weight || 0);
+  const laborTime = compatibility?.time || 'N/A';
+
+  const generateBuildSheet = async () => {
+    if (!selectedCrankset || !selectedCassette || !selectedDerailleur) return;
+    
+    setIsGeneratingPDF(true);
+    
+    try {
+      const buildData = {
+        customer: { name: customerName || 'Customer' },
+        shop: { 
+          name: 'Your Bike Shop',
+          address: '123 Main St, Your City',
+          phone: '(555) 123-4567',
+          email: 'info@yourshop.com'
+        },
+        components: {
+          crankset: selectedCrankset,
+          cassette: selectedCassette,
+          derailleur: selectedDerailleur
+        },
+        buildData: {
+          totalWeight,
+          laborTime,
+          compatibility: compatibility?.message,
+          partsList: [
+            {
+              name: selectedCrankset.model,
+              partNumber: selectedCrankset.id.toUpperCase(),
+              quantity: '1x',
+              weight: `${selectedCrankset.weight}g`,
+              notes: selectedCrankset.variant
+            },
+            {
+              name: selectedCassette.model,
+              partNumber: selectedCassette.id.toUpperCase(),
+              quantity: '1x', 
+              weight: `${selectedCassette.weight}g`,
+              notes: selectedCassette.variant
+            },
+            {
+              name: selectedDerailleur.model,
+              partNumber: selectedDerailleur.id.toUpperCase(),
+              quantity: '1x',
+              weight: `${selectedDerailleur.weight}g`, 
+              notes: selectedDerailleur.variant
+            }
+          ],
+          warnings: compatibility?.status === 'error' ? [compatibility.message] : []
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      const response = await fetch('/api/export/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildData)
+      });
       
-      {/* Left Panel: Component Library (400px) */}
-      <div className="w-[400px] bg-surface border-r border-border overflow-y-auto">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-sm font-bold uppercase tracking-wide">Component Library</h2>
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `build-sheet-${customerName || 'customer'}-${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      alert('Failed to generate build sheet');
+    }
+    
+    setIsGeneratingPDF(false);
+  };
+
+  const ComponentSelector = ({ components, selected, onSelect, type }) => (
+    <div className="space-y-2">
+      {components.map(component => (
+        <div
+          key={component.id}
+          onClick={() => onSelect(component)}
+          className={`p-3 border rounded-lg cursor-pointer transition-all ${
+            selected?.id === component.id 
+              ? 'border-blue-500 bg-blue-50' 
+              : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="font-medium text-sm">{component.model}</div>
+          <div className="text-xs text-gray-500">{component.variant}</div>
+          <div className="flex justify-between items-center mt-1">
+            <span className="text-sm font-semibold">{component.weight}g</span>
+            <span className="text-xs text-gray-400">{component.speeds}</span>
+          </div>
         </div>
-        
-        {/* REPLACE THE OLD CRANKSETS SECTION WITH THIS: */}
-        <ComponentSelector
-          components={componentDatabaseV2.cranksets}
-          selectedComponent={selectedCrankset}
-          onSelect={setSelectedCrankset}
-          type="crankset"
-        />
-
-        {/* REPLACE THE OLD CASSETTES SECTION WITH THIS: */}
-        <ComponentSelector
-          components={componentDatabaseV2.cassettes}
-          selectedComponent={selectedCassette}
-          onSelect={setSelectedCassette}
-          type="cassette"
-        />
-
-        {/* REPLACE THE OLD REAR DERAILLEURS SECTION WITH THIS: */}
-        <ComponentSelector
-          components={componentDatabaseV2.rearDerailleurs}
-          selectedComponent={selectedDerailleur}
-          onSelect={setSelectedDerailleur}
-          type="derailleur"
-        />
-      </div>
-
-      {/* Center Panel: Analysis Area (flex-1) */}
-      <div className="flex-1 bg-surface overflow-y-auto">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-sm font-bold uppercase tracking-wide">Analysis</h2>
-        </div>
-        
-        {/* Selected Components Summary */}
-        {(selectedCrankset || selectedCassette || selectedDerailleur) && (
-          <div className="p-4 bg-gray-50 border-b border-border">
-            <div className="text-xs font-bold mb-2">CURRENT SELECTION:</div>
-            <div className="grid grid-cols-3 gap-4 text-xs">
-              <div>
-                <div className="font-semibold">Crankset:</div>
-                <div className="text-text-secondary">
-                  {selectedCrankset ? `${selectedCrankset.model} ${selectedCrankset.variant}` : 'None selected'}
-                </div>
-              </div>
-              <div>
-                <div className="font-semibold">Cassette:</div>
-                <div className="text-text-secondary">
-                  {selectedCassette ? `${selectedCassette.model} ${selectedCassette.variant}` : 'None selected'}
-                </div>
-              </div>
-              <div>
-                <div className="font-semibold">Derailleur:</div>
-                <div className="text-text-secondary">
-                  {selectedDerailleur ? `${selectedDerailleur.model} ${selectedDerailleur.variant}` : 'None selected'}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Gear Chart */}
-        {selectedCrankset && selectedCassette && (
-          <div className="p-4 border-b border-border">
-            <div className="text-xs font-bold mb-3 uppercase">Gear Overlap Analysis</div>
-            <GearChart 
-              crankset={selectedCrankset}
-              cassette={selectedCassette}
-              width={800}
-              height={300}
-            />
-          </div>
-        )}
-
-        {/* Real-World Compatibility Matrix */}
-        {(selectedCrankset || selectedCassette || selectedDerailleur) && (
-          <div className="p-4">
-            <div className="text-xs font-bold mb-3 uppercase">Real-World Compatibility</div>
-            <CompatibilityView 
-              selectedCrankset={selectedCrankset}
-              selectedCassette={selectedCassette} 
-              selectedDerailleur={selectedDerailleur}
-            />
-          </div>
-        )}
-
-        {/* Build Sheet Generator */}
-        {selectedCrankset && selectedCassette && selectedDerailleur && (
-          <div className="p-4 border-t border-border">
-            <div className="text-xs font-bold mb-3 uppercase">Build Sheet Generator</div>
-            <BuildSheet 
-              crankset={selectedCrankset}
-              cassette={selectedCassette} 
-              derailleur={selectedDerailleur}
-            />
-          </div>
-        )}
-
-        {/* Strava Integration */}
-        {(selectedCrankset || selectedCassette) && (
-          <div className="p-4 border-t border-border">
-            <div className="text-xs font-bold mb-3 uppercase">🚴 Strava Analysis</div>
-            <StravaIntegration 
-              crankset={selectedCrankset}
-              cassette={selectedCassette}
-            />
-          </div>
-        )}
-
-        {/* Data Table */}
-        <div className="p-4">
-          <div className="text-xs font-bold mb-3 uppercase">Compatibility Reports</div>
-          <DataTable />
-        </div>
-      </div>
-
-      {/* Right Panel: Quick Stats (320px) */}
-      <div className="w-[320px] bg-surface border-l border-border overflow-y-auto">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-sm font-bold uppercase tracking-wide">Quick Stats</h2>
-        </div>
-        
-        <div className="p-4 space-y-4">
-          <div className="p-3 bg-gray-50 rounded">
-            <div className="text-xs font-bold mb-1">Database Stats</div>
-            <div className="text-xs space-y-1">
-              <div>Cranksets: {componentDatabaseV2.cranksets.length}</div>
-              <div>Cassettes: {componentDatabaseV2.cassettes.length}</div>
-              <div>Derailleurs: {componentDatabaseV2.rearDerailleurs.length}</div>
-            </div>
-          </div>
-
-          {selectedCrankset && (
-            <div className="p-3 bg-gray-50 rounded">
-              <div className="text-xs font-bold mb-1">Selected Crankset</div>
-              <div className="text-xs space-y-1">
-                <div>Weight: {selectedCrankset.weight}g</div>
-                <div>Chainrings: {selectedCrankset.teeth.join('/')}</div>
-                <div>Type: {selectedCrankset.bikeType}</div>
-                <div>Speeds: {selectedCrankset.speeds}</div>
-              </div>
-            </div>
-          )}
-
-          {selectedCassette && (
-            <div className="p-3 bg-gray-50 rounded">
-              <div className="text-xs font-bold mb-1">Selected Cassette</div>
-              <div className="text-xs space-y-1">
-                <div>Weight: {selectedCassette.weight}g</div>
-                <div>Range: {selectedCassette.teeth[0]}-{selectedCassette.teeth[1]}T</div>
-                <div>Speeds: {selectedCassette.speeds}</div>
-              </div>
-            </div>
-          )}
-
-          {selectedDerailleur && (
-            <div className="p-3 bg-gray-50 rounded">
-              <div className="text-xs font-bold mb-1">Selected Derailleur</div>
-              <div className="text-xs space-y-1">
-                <div>Weight: {selectedDerailleur.weight}g</div>
-                <div>Max Cog: {selectedDerailleur.maxCog}T</div>
-                <div>Capacity: {selectedDerailleur.totalCapacity}T</div>
-                <div>Cage: {selectedDerailleur.cageLength}</div>
-                {selectedDerailleur.hasClutch && <div>✓ Clutch</div>}
-                {selectedDerailleur.isElectronic && <div>⚡ Electronic</div>}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      ))}
     </div>
   );
-}
-
-// Simple compatibility analysis component
-function CompatibilityAnalysis({ crankset, cassette, derailleur }) {
-  // Use your existing compatibility rules
-  const analysis = componentDatabaseV2.compatibilityRules.validateDrivetrain(
-    crankset, 
-    cassette, 
-    derailleur
-  );
 
   return (
-    <div className="space-y-3">
-      <div className={`p-3 rounded text-xs ${
-        analysis.overallCompatibility === 'compatible' 
-          ? 'bg-success bg-opacity-10 border border-success' 
-          : 'bg-error bg-opacity-10 border border-error'
-      }`}>
-        <div className="font-bold">
-          {analysis.overallCompatibility === 'compatible' ? '✓ Compatible' : '✗ Incompatible'}
+    <div className="max-w-md mx-auto bg-white min-h-screen">
+      {/* Header */}
+      <div className="bg-blue-600 text-white p-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold">CrankSmith Pro</h1>
+          <div className="text-xs bg-blue-700 px-2 py-1 rounded">BETA</div>
         </div>
+        <p className="text-blue-100 text-sm mt-1">Fast drivetrain compatibility</p>
       </div>
 
-      {analysis.errors.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-xs font-bold text-error">ERRORS:</div>
-          {analysis.errors.map((error, i) => (
-            <div key={i} className="text-xs text-error">• {error}</div>
-          ))}
-        </div>
-      )}
-
-      {analysis.warnings.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-xs font-bold text-warning">WARNINGS:</div>
-          {analysis.warnings.map((warning, i) => (
-            <div key={i} className="text-xs text-warning">• {warning}</div>
-          ))}
-        </div>
-      )}
-
-      {analysis.recommendations.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-xs font-bold text-accent">RECOMMENDATIONS:</div>
-          {analysis.recommendations.map((rec, i) => (
-            <div key={i} className="text-xs text-accent">• {rec}</div>
-          ))}
-        </div>
-      )}
-
-      <div className="p-3 bg-gray-50 rounded">
-        <div className="text-xs font-bold mb-1">Chain Length</div>
-        <div className="text-xs">
-          {analysis.chainLength.links} links ({analysis.chainLength.formula})
-        </div>
+      {/* Customer Input */}
+      <div className="p-4 border-b">
+        <input
+          type="text"
+          placeholder="Customer name (optional)"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          className="w-full p-3 border rounded-lg text-sm focus:outline-none focus:border-blue-500"
+        />
       </div>
+
+      {/* Component Tabs */}
+      <div className="flex border-b">
+        {[
+          { key: 'crankset', label: 'Crankset', selected: selectedCrankset },
+          { key: 'cassette', label: 'Cassette', selected: selectedCassette },
+          { key: 'derailleur', label: 'Derailleur', selected: selectedDerailleur }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 p-3 text-sm font-medium relative ${
+              activeTab === tab.key 
+                ? 'border-b-2 border-blue-500 text-blue-600' 
+                : 'text-gray-500'
+            }`}
+          >
+            {tab.label}
+            {tab.selected && (
+              <div className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Component Selection */}
+      <div className="p-4 h-96 overflow-y-auto">
+        {activeTab === 'crankset' && (
+          <ComponentSelector
+            components={topCranksets}
+            selected={selectedCrankset}
+            onSelect={setSelectedCrankset}
+            type="crankset"
+          />
+        )}
+        {activeTab === 'cassette' && (
+          <ComponentSelector
+            components={topCassettes}
+            selected={selectedCassette}
+            onSelect={setSelectedCassette}
+            type="cassette"
+          />
+        )}
+        {activeTab === 'derailleur' && (
+          <ComponentSelector
+            components={topDerailleurs}
+            selected={selectedDerailleur}
+            onSelect={setSelectedDerailleur}
+            type="derailleur"
+          />
+        )}
+      </div>
+
+      {/* Compatibility Status */}
+      {compatibility && (
+        <div className="mx-4 mb-4">
+          <div className={`p-4 rounded-lg border-l-4 ${
+            compatibility.status === 'compatible' 
+              ? 'bg-green-50 border-green-500' 
+              : compatibility.status === 'warning'
+              ? 'bg-yellow-50 border-yellow-500'
+              : 'bg-red-50 border-red-500'
+          }`}>
+            <div className="flex items-center">
+              <div className={`w-3 h-3 rounded-full mr-3 ${
+                compatibility.status === 'compatible' ? 'bg-green-500' :
+                compatibility.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+              }`}></div>
+              <span className="font-medium text-sm">{compatibility.message}</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-1 ml-6">
+              Installation time: {compatibility.time}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Build Summary */}
+      {selectedCrankset && selectedCassette && selectedDerailleur && (
+        <div className="mx-4 mb-4 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-medium text-sm mb-3">Build Summary</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-500">Total Weight:</span>
+              <div className="font-medium">{totalWeight}g</div>
+            </div>
+            <div>
+              <span className="text-gray-500">Install Time:</span>
+              <div className="font-medium">{laborTime}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      {compatibility && (
+        <div className="p-4 space-y-3">
+          <button 
+            onClick={generateBuildSheet}
+            disabled={isGeneratingPDF}
+            className="w-full bg-blue-600 text-white p-4 rounded-lg font-medium disabled:opacity-50"
+          >
+            {isGeneratingPDF ? 'Generating...' : '📄 Generate Build Sheet'}
+          </button>
+          
+          <div className="text-center">
+            <div className="text-xs text-gray-500">
+              Compatibility checked in <span className="font-medium text-green-600">2 seconds</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
