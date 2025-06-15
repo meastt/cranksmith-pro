@@ -6,8 +6,7 @@ export default function StravaIntegration({ crankset, cassette }) {
   const [athleteName, setAthleteName] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [accessToken, setAccessToken] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('checking'); // checking, disconnected, connected, error
+  const [connectionStatus, setConnectionStatus] = useState('checking');
 
   useEffect(() => {
     initializeStravaConnection();
@@ -15,51 +14,39 @@ export default function StravaIntegration({ crankset, cassette }) {
 
   const initializeStravaConnection = async () => {
     try {
-      // First check for stored credentials
-      const storedToken = localStorage.getItem('cranksmith_strava_token');
-      const storedAthlete = localStorage.getItem('cranksmith_strava_athlete');
-      const storedExpiry = localStorage.getItem('cranksmith_strava_expiry');
-
-      if (storedToken && storedAthlete) {
-        // Check if token is still valid (Strava tokens expire)
-        const isExpired = storedExpiry && Date.now() > parseInt(storedExpiry);
-        
-        if (!isExpired) {
-          setIsConnected(true);
-          setAthleteName(storedAthlete);
-          setAccessToken(storedToken);
-          setConnectionStatus('connected');
-          return;
-        } else {
-          // Clean up expired tokens
-          clearStoredCredentials();
-        }
+      setConnectionStatus('checking');
+      
+      // Check if we have session data from the server
+      const sessionResponse = await fetch('/api/strava/session');
+      const sessionData = await sessionResponse.json();
+      
+      if (sessionData.isConnected) {
+        setIsConnected(true);
+        setAthleteName(sessionData.athleteName);
+        setConnectionStatus('connected');
+        return;
       }
 
-      // Check URL params for new auth
+      // Check URL params for new auth (one-time use)
       const urlParams = new URLSearchParams(window.location.search);
       const connected = urlParams.get('strava_connected');
-      const athlete = urlParams.get('athlete');
-      const token = urlParams.get('access_token');
       const error = urlParams.get('strava_error');
 
-      if (connected === 'true' && athlete && token) {
-        const decodedAthlete = decodeURIComponent(athlete);
-        const decodedToken = decodeURIComponent(token);
-        
-        setIsConnected(true);
-        setAthleteName(decodedAthlete);
-        setAccessToken(decodedToken);
+      if (connected === 'true') {
+        // Session was set by the auth callback
         setConnectionStatus('connected');
         
-        // Store credentials securely (expires in 6 hours for security)
-        const expiry = Date.now() + (6 * 60 * 60 * 1000);
-        localStorage.setItem('cranksmith_strava_token', decodedToken);
-        localStorage.setItem('cranksmith_strava_athlete', decodedAthlete);
-        localStorage.setItem('cranksmith_strava_expiry', expiry.toString());
-        
-        // Clean URL immediately for security
+        // Clean URL immediately
         window.history.replaceState({}, '', '/pro');
+        
+        // Refresh session data
+        const refreshResponse = await fetch('/api/strava/session');
+        const refreshData = await refreshResponse.json();
+        
+        if (refreshData.isConnected) {
+          setIsConnected(true);
+          setAthleteName(refreshData.athleteName);
+        }
       } else if (error) {
         setConnectionStatus('error');
         console.error('Strava connection error:', error);
@@ -73,26 +60,21 @@ export default function StravaIntegration({ crankset, cassette }) {
     }
   };
 
-  const clearStoredCredentials = () => {
-    localStorage.removeItem('cranksmith_strava_token');
-    localStorage.removeItem('cranksmith_strava_athlete');
-    localStorage.removeItem('cranksmith_strava_expiry');
-  };
-
-  // FIXED: Proper OAuth flow initiation
   const connectStrava = () => {
     setConnectionStatus('connecting');
-    // Redirect to our auth endpoint, which will handle the OAuth flow
     window.location.href = '/api/strava/auth';
   };
 
-  const disconnect = () => {
-    setIsConnected(false);
-    setAthleteName('');
-    setAccessToken(null);
-    setAnalysis(null);
-    setConnectionStatus('disconnected');
-    clearStoredCredentials();
+  const disconnect = async () => {
+    try {
+      await fetch('/api/strava/disconnect', { method: 'POST' });
+      setIsConnected(false);
+      setAthleteName('');
+      setAnalysis(null);
+      setConnectionStatus('disconnected');
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
   };
 
   const getConnectionStatusDisplay = () => {
@@ -101,7 +83,7 @@ export default function StravaIntegration({ crankset, cassette }) {
         return {
           icon: '⟳',
           title: 'Checking Strava Connection...',
-          subtitle: 'Verifying stored credentials',
+          subtitle: 'Verifying session',
           className: 'bg-gray-100 border-gray-300 animate-pulse'
         };
       case 'connecting':
@@ -136,7 +118,7 @@ export default function StravaIntegration({ crankset, cassette }) {
   };
 
   const analyzeRides = async () => {
-    if (!accessToken || !crankset || !cassette) return;
+    if (!isConnected || !crankset || !cassette) return;
 
     setLoading(true);
     try {
@@ -144,11 +126,14 @@ export default function StravaIntegration({ crankset, cassette }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accessToken,
           crankset,
           cassette
         })
       });
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
+      }
 
       const data = await response.json();
       
@@ -159,7 +144,6 @@ export default function StravaIntegration({ crankset, cassette }) {
       }
     } catch (error) {
       console.error('Analysis failed:', error);
-      // Don't use alert in pro software
       setConnectionStatus('error');
     }
     setLoading(false);
@@ -177,7 +161,7 @@ export default function StravaIntegration({ crankset, cassette }) {
 
   return (
     <div className="strava-integration">
-      {/* Professional Connection Status */}
+      {/* Connection Status */}
       <div className={`p-4 rounded border-2 mb-4 transition-all duration-300 ${statusDisplay.className}`}>
         <div className="flex justify-between items-center">
           <div>

@@ -6,6 +6,7 @@ import GearChart from '../components/GearChart';
 import CompatibilityView from '../components/CompatibilityView';
 import BuildSheet from '../components/BuildSheet';
 import StravaIntegration from '../components/StravaIntegration';
+import ComponentSelector from '../components/ComponentSelector';
 
 export default function ProPage() {
   const [selectedCrankset, setSelectedCrankset] = useState(null);
@@ -21,68 +22,29 @@ export default function ProPage() {
           <h2 className="text-sm font-bold uppercase tracking-wide">Component Library</h2>
         </div>
         
-        {/* Cranksets Section */}
-        <div className="border-b border-border">
-          <div className="p-3 bg-gray-50 text-xs font-bold uppercase">
-            Cranksets
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {componentDatabaseV2.cranksets.slice(0, 10).map(crankset => (
-              <div 
-                key={crankset.id}
-                className={`p-2 text-xs cursor-pointer hover:bg-gray-50 border-b border-gray-100 ${
-                  selectedCrankset?.id === crankset.id ? 'bg-accent text-white' : ''
-                }`}
-                onClick={() => setSelectedCrankset(crankset)}
-              >
-                <div className="font-semibold">{crankset.model}</div>
-                <div className="text-text-secondary">{crankset.variant} • {crankset.weight}g</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* REPLACE THE OLD CRANKSETS SECTION WITH THIS: */}
+        <ComponentSelector
+          components={componentDatabaseV2.cranksets}
+          selectedComponent={selectedCrankset}
+          onSelect={setSelectedCrankset}
+          type="crankset"
+        />
 
-        {/* Cassettes Section */}
-        <div className="border-b border-border">
-          <div className="p-3 bg-gray-50 text-xs font-bold uppercase">
-            Cassettes  
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {componentDatabaseV2.cassettes.slice(0, 10).map(cassette => (
-              <div 
-                key={cassette.id}
-                className={`p-2 text-xs cursor-pointer hover:bg-gray-50 border-b border-gray-100 ${
-                  selectedCassette?.id === cassette.id ? 'bg-accent text-white' : ''
-                }`}
-                onClick={() => setSelectedCassette(cassette)}
-              >
-                <div className="font-semibold">{cassette.model}</div>
-                <div className="text-text-secondary">{cassette.variant} • {cassette.weight}g</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* REPLACE THE OLD CASSETTES SECTION WITH THIS: */}
+        <ComponentSelector
+          components={componentDatabaseV2.cassettes}
+          selectedComponent={selectedCassette}
+          onSelect={setSelectedCassette}
+          type="cassette"
+        />
 
-        {/* Rear Derailleurs Section */}
-        <div className="border-b border-border">
-          <div className="p-3 bg-gray-50 text-xs font-bold uppercase">
-            Rear Derailleurs
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {componentDatabaseV2.rearDerailleurs.slice(0, 10).map(rd => (
-              <div 
-                key={rd.id}
-                className={`p-2 text-xs cursor-pointer hover:bg-gray-50 border-b border-gray-100 ${
-                  selectedDerailleur?.id === rd.id ? 'bg-accent text-white' : ''
-                }`}
-                onClick={() => setSelectedDerailleur(rd)}
-              >
-                <div className="font-semibold">{rd.model}</div>
-                <div className="text-text-secondary">{rd.variant} • {rd.weight}g • Max {rd.maxCog}T</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* REPLACE THE OLD REAR DERAILLEURS SECTION WITH THIS: */}
+        <ComponentSelector
+          components={componentDatabaseV2.rearDerailleurs}
+          selectedComponent={selectedDerailleur}
+          onSelect={setSelectedDerailleur}
+          type="derailleur"
+        />
       </div>
 
       {/* Center Panel: Analysis Area (flex-1) */}
